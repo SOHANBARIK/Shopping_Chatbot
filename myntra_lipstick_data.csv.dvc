@@ -1,0 +1,5 @@
+outs:
+- md5: cd8601dee00661688aa170b52e5bf381
+  size: 16832
+  hash: md5
+  path: myntra_lipstick_data.csv
