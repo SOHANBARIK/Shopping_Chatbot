@@ -1,0 +1,33 @@
+# --- Core Backend ---
+fastapi
+uvicorn
+pydantic
+requests
+python-dotenv
+
+# --- Database ---
+sqlalchemy
+psycopg2-binary
+
+# --- Vector DB (Chroma) ---
+chromadb
+
+# --- Embeddings ---
+sentence-transformers
+tqdm  # required by transformers ecosystem
+
+# --- CSV + Data Processing ---
+pandas
+
+# --- Frontend (Streamlit UI) ---
+streamlit
+
+# --- LLM API ---
+openai
+
+
+# rank-bm25
+
+
+
+
