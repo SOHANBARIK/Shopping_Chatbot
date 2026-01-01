@@ -43,16 +43,30 @@ if "messages" not in st.session_state:
 if "current_session" not in st.session_state:
     st.session_state["current_session"] = None
 
+# --- HELPER: FORMAT BUY BUTTON ---
+def format_buy_link(url):
+    """Creates a nice green button for the link"""
+    if not url or url == "#":
+        return ""
+    # Green button style
+    return f"""<a href='{url}' target='_blank' style='
+        background-color:#28a745; 
+        color:white; 
+        padding:4px 8px; 
+        text-decoration:none; 
+        border-radius:4px; 
+        font-size:0.9em;
+        font-weight:bold;
+    '>BUY NOW 🛒</a>"""
+
 # --- CORE LOGIC: THE CALLBACK ---
 def process_input():
-    """
-    Runs BEFORE page reload to guarantee data safety.
-    """
+    """Run this BEFORE the page reloads."""
     user_text = st.session_state.user_input
     if not user_text:
         return
 
-    # 1. Ensure Session Exists
+    # 1. Ensure Session
     if st.session_state["current_session"] is None:
         new_sid = f"session_{int(time.time())}"
         try:
@@ -64,7 +78,7 @@ def process_input():
     
     sid = st.session_state["current_session"]
 
-    # 2. Append User Message (Instant)
+    # 2. Add User Message (Instant)
     st.session_state["messages"].append({"role": "user", "content": user_text})
 
     # 3. Generate Response
@@ -76,32 +90,26 @@ def process_input():
         info = handoff["contact"]
         response_text = f"<b>{handoff['topic'].title()} Support</b><br>Phone: {info['phone']}<br>Email: {info['email']}"
 
-    # B. Analytics (WITH LINKS)
+    # B. Analytics (WITH BUTTONS)
     if not response_text:
         analytic = detect_analytic_query(user_text)
         
         if analytic == "most_expensive":
             item = get_most_expensive()
-            response_text = (
-                f"💎 <b>Most Expensive:</b> {item['Brand']} {item['Product Name']} — ₹{item['Price']} "
-                f"<a href='{item['URL']}' target='_blank'>[Buy Now]</a>"
-            )
+            btn = format_buy_link(item['URL'])
+            response_text = f"💎 <b>Most Expensive:</b> {item['Brand']} {item['Product Name']} — ₹{item['Price']} {btn}"
             
         elif analytic == "cheapest":
             item = get_cheapest()
-            response_text = (
-                f"💸 <b>Cheapest:</b> {item['Brand']} {item['Product Name']} — ₹{item['Price']} "
-                f"<a href='{item['URL']}' target='_blank'>[Buy Now]</a>"
-            )
+            btn = format_buy_link(item['URL'])
+            response_text = f"💸 <b>Cheapest:</b> {item['Brand']} {item['Product Name']} — ₹{item['Price']} {btn}"
             
         elif analytic == "all_products":
             items = get_all_products()
             response_text = "<b>All Products:</b><br>"
             for i in items:
-                response_text += (
-                    f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']} "
-                    f"<a href='{i['URL']}' target='_blank'>[Buy Now]</a><br>"
-                )
+                btn = format_buy_link(i['URL'])
+                response_text += f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']} {btn}<br>"
                 
         elif analytic == "price_filter":
             nums = re.findall(r"\d+", user_text)
@@ -110,12 +118,10 @@ def process_input():
                 items = filter_products_by_price(0, max_p)
                 response_text = f"<b>Under ₹{max_p}:</b><br>"
                 for i in items:
-                    response_text += (
-                        f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']} "
-                        f"<a href='{i['URL']}' target='_blank'>[Buy Now]</a><br>"
-                    )
+                    btn = format_buy_link(i['URL'])
+                    response_text += f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']} {btn}<br>"
 
-    # C. RAG / AI (WITH LINKS)
+    # C. RAG / AI (WITH BUTTONS)
     if not response_text:
         hits = query_and_rerank(user_text, n=3)
         docs = [h["doc"] for h in hits]
@@ -123,13 +129,11 @@ def process_input():
         mem_history = st.session_state["messages"][-6:]
         mem_str = "\n".join([f"{m['role']}: {m['content']}" for m in mem_history])
 
+        # Strict Prompt to prevent LLM from making up links
         system_prompt = """
-        You are a STRICT product assistant.
-    Rules:
-1. Only use the CONTEXT provided.
-2. If the answer is not in the context, say "I don't have that information."
-3. Never guess or make up products, names, brands, or prices.
-4. Be short, factual, and helpful."
+        You are a shopping assistant. 
+        If you find products in the Context, mention them briefly.
+        DO NOT try to create links yourself. The system will add the 'Buy Now' buttons automatically below your answer.
         """
         user_prompt = f"Question: {user_text}\nContext: {docs}\nHistory: {mem_str}"
 
@@ -142,15 +146,13 @@ def process_input():
             )
             response_text = html.escape(resp.choices[0].message.content.strip())
             
-            # Append Matches with Links
+            # Append Top Matches with BUTTONS
             if hits:
                 response_text += "<br><br><b>Recommended Matches:</b><br>"
                 for m in [h["meta"] for h in hits]:
-                    url = m.get('url', '#')
-                    response_text += (
-                        f"- {m['brand']} {m['name']} — ₹{m['price']} "
-                        f"<a href='{url}' target='_blank'>[Buy Now]</a><br>"
-                    )
+                    btn = format_buy_link(m.get('url', '#'))
+                    response_text += f"- {m['brand']} {m['name']} — ₹{m['price']} {btn}<br>"
+                    
         except Exception as e:
             response_text = f"AI Error: {e}"
 
@@ -161,7 +163,7 @@ def process_input():
     try:
         log_conversation_db(sid, user_text, response_text)
     except Exception:
-        pass # Ignore DB errors to keep UI smooth
+        pass 
 
 # --- HELPER: LOAD HISTORY ---
 def load_history(sid):
