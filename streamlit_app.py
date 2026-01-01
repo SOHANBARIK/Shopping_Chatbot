@@ -28,7 +28,6 @@ BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "mistralai/mistral-7b-instruct")
 PRODUCTS_CSV = os.getenv("PRODUCTS_CSV", "myntra_lipstick_data.csv")
-MEMORY_WINDOW = 6
 
 # --- INITIALIZATION ---
 if "init_done" not in st.session_state:
@@ -47,15 +46,13 @@ if "current_session" not in st.session_state:
 # --- CORE LOGIC: THE CALLBACK ---
 def process_input():
     """
-    This runs BEFORE the page reloads.
-    It guarantees state is updated before the UI tries to render it.
+    Runs BEFORE page reload to guarantee data safety.
     """
-    # 1. Get user input from the widget state
     user_text = st.session_state.user_input
     if not user_text:
         return
 
-    # 2. Ensure Session Exists
+    # 1. Ensure Session Exists
     if st.session_state["current_session"] is None:
         new_sid = f"session_{int(time.time())}"
         try:
@@ -67,38 +64,58 @@ def process_input():
     
     sid = st.session_state["current_session"]
 
-    # 3. Append User Message to State (Instant UI Update)
+    # 2. Append User Message (Instant)
     st.session_state["messages"].append({"role": "user", "content": user_text})
 
-    # 4. Generate Response
+    # 3. Generate Response
     response_text = ""
     
-    # Handoff Check
+    # A. Handoff
     handoff = detect_handoff_intent(user_text)
     if handoff:
         info = handoff["contact"]
         response_text = f"<b>{handoff['topic'].title()} Support</b><br>Phone: {info['phone']}<br>Email: {info['email']}"
 
-    # Analytics Check
+    # B. Analytics (WITH LINKS)
     if not response_text:
         analytic = detect_analytic_query(user_text)
+        
         if analytic == "most_expensive":
             item = get_most_expensive()
-            response_text = f"💎 <b>Most Expensive:</b> {item['Brand']} {item['Product Name']} — ₹{item['Price']}"
+            response_text = (
+                f"💎 <b>Most Expensive:</b> {item['Brand']} {item['Product Name']} — ₹{item['Price']} "
+                f"<a href='{item['URL']}' target='_blank'>[Buy Now]</a>"
+            )
+            
         elif analytic == "cheapest":
             item = get_cheapest()
-            response_text = f"💸 <b>Cheapest:</b> {item['Brand']} {item['Product Name']} — ₹{item['Price']}"
+            response_text = (
+                f"💸 <b>Cheapest:</b> {item['Brand']} {item['Product Name']} — ₹{item['Price']} "
+                f"<a href='{item['URL']}' target='_blank'>[Buy Now]</a>"
+            )
+            
         elif analytic == "all_products":
             items = get_all_products()
-            response_text = "<b>All Products:</b><br>" + "".join([f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']}<br>" for i in items])
+            response_text = "<b>All Products:</b><br>"
+            for i in items:
+                response_text += (
+                    f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']} "
+                    f"<a href='{i['URL']}' target='_blank'>[Buy Now]</a><br>"
+                )
+                
         elif analytic == "price_filter":
             nums = re.findall(r"\d+", user_text)
             if nums:
                 max_p = int(nums[0])
                 items = filter_products_by_price(0, max_p)
-                response_text = f"<b>Under ₹{max_p}:</b><br>" + "".join([f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']}<br>" for i in items])
+                response_text = f"<b>Under ₹{max_p}:</b><br>"
+                for i in items:
+                    response_text += (
+                        f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']} "
+                        f"<a href='{i['URL']}' target='_blank'>[Buy Now]</a><br>"
+                    )
 
-    # RAG / AI Check
+    # C. RAG / AI (WITH LINKS)
     if not response_text:
         hits = query_and_rerank(user_text, n=3)
         docs = [h["doc"] for h in hits]
@@ -118,21 +135,26 @@ def process_input():
             )
             response_text = html.escape(resp.choices[0].message.content.strip())
             
+            # Append Matches with Links
             if hits:
-                response_text += "<br><br><b>Matches:</b><br>"
+                response_text += "<br><br><b>Recommended Matches:</b><br>"
                 for m in [h["meta"] for h in hits]:
-                    response_text += f"- {m['brand']} {m['name']} — ₹{m['price']} <a href='{m.get('url', '#')}'>link</a><br>"
+                    url = m.get('url', '#')
+                    response_text += (
+                        f"- {m['brand']} {m['name']} — ₹{m['price']} "
+                        f"<a href='{url}' target='_blank'>[Buy Now]</a><br>"
+                    )
         except Exception as e:
             response_text = f"AI Error: {e}"
 
-    # 5. Append Assistant Message to State
+    # 4. Save Response
     st.session_state["messages"].append({"role": "assistant", "content": response_text})
 
-    # 6. Save to DB (Silent)
+    # 5. DB Sync (Silent)
     try:
         log_conversation_db(sid, user_text, response_text)
-    except Exception as e:
-        print(f"DB Save Failed: {e}")
+    except Exception:
+        pass # Ignore DB errors to keep UI smooth
 
 # --- HELPER: LOAD HISTORY ---
 def load_history(sid):
@@ -183,5 +205,4 @@ for msg in st.session_state["messages"]:
     )
 
 # 2. Input Widget (Linked to Callback)
-# Note: We do NOT assign the result to a variable 'q'. We let the callback handle it.
 st.chat_input("Ask about products or prices...", key="user_input", on_submit=process_input)
