@@ -105,6 +105,7 @@ for m in st.session_state["messages"]:
 
 # Chat Input
 q = st.chat_input("Ask about products or prices...")
+st.markdown(f"<div style='background:#E8F0FE;color:black;padding:8px;border-radius:8px'>{c}</div>", unsafe_allow_html=True)
 
 if q:
     sid = st.session_state["current_session"]
