@@ -52,7 +52,7 @@ def format_buy_link(url):
     return f"""<a href='{url}' target='_blank' style='
         background-color:#28a745; 
         color:white; 
-        padding:4px 8px; 
+        padding:3px 6px; 
         text-decoration:none; 
         border-radius:4px; 
         font-size:0.9em;
