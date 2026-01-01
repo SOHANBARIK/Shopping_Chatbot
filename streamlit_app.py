@@ -101,7 +101,7 @@ if "messages" not in st.session_state:
 for m in st.session_state["messages"]:
     c = m["content"]
     bg = "#E8F0FE" if m["role"] == "user" else "#FFE3ED"
-    st.markdown(f"<div style='background:{bg};padding:8px;border-radius:8px'>{c}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='background:{bg};color:black;padding:8px;border-radius:8px'>{c}</div>", unsafe_allow_html=True)
 
 # Chat Input
 q = st.chat_input("Ask about products or prices...")
@@ -118,7 +118,7 @@ if q:
         topic = handoff["topic"].title()
         msg = f"<b>{topic} Support</b><br>Phone: {info['phone']}<br>Email: {info['email']}<br>{info['instructions']}"
         st.session_state["messages"].append({"role": "assistant", "content": msg})
-        st.markdown(f"<div style='background:#FFE3ED;padding:8px;border-radius:8px'>{msg}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:#FFE3ED;color:black;padding:8px;border-radius:8px'>{msg}</div>", unsafe_allow_html=True)
         log_conversation_db(sid, q, msg)
         st.stop()
 
@@ -129,7 +129,7 @@ if q:
         item = get_most_expensive()
         msg = f"💎 <b>Most Expensive Lipstick</b><br>{item['Brand']} {item['Product Name']} — ₹{item['Price']}<br><a href='{item['URL']}' target='_blank'>link</a>"
         st.session_state["messages"].append({"role": "assistant", "content": msg})
-        st.markdown(f"<div style='background:#FFE3ED;padding:8px;border-radius:8px'>{msg}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:#FFE3ED;color:black;padding:8px;border-radius:8px'>{msg}</div>", unsafe_allow_html=True)
         log_conversation_db(sid, q, msg)
         st.stop()
 
@@ -137,7 +137,7 @@ if q:
         item = get_cheapest()
         msg = f"💸 <b>Cheapest Lipstick</b><br>{item['Brand']} {item['Product Name']} — ₹{item['Price']}<br><a href='{item['URL']}' target='_blank'>link</a>"
         st.session_state["messages"].append({"role": "assistant", "content": msg})
-        st.markdown(f"<div style='background:#FFE3ED;padding:8px;border-radius:8px'>{msg}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:#FFE3ED;color:black;padding:8px;border-radius:8px'>{msg}</div>", unsafe_allow_html=True)
         log_conversation_db(sid, q, msg)
         st.stop()
 
@@ -147,7 +147,7 @@ if q:
         for i in items:
             msg += f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']} → <a href='{i['URL']}' target='_blank'>link</a><br>"
         st.session_state["messages"].append({"role": "assistant", "content": msg})
-        st.markdown(f"<div style='background:#FFE3ED;padding:8px;border-radius:8px'>{msg}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='background:#FFE3ED;color:black;padding:8px;border-radius:8px'>{msg}</div>", unsafe_allow_html=True)
         log_conversation_db(sid, q, msg)
         st.stop()
 
@@ -162,7 +162,7 @@ if q:
             for i in items:
                 msg += f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']} → <a href='{i['URL']}' target='_blank'>link</a><br>"
             st.session_state["messages"].append({"role": "assistant", "content": msg})
-            st.markdown(f"<div style='background:#FFE3ED;padding:8px;border-radius:8px'>{msg}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='background:#FFE3ED;color:black;padding:8px;border-radius:8px'>{msg}</div>", unsafe_allow_html=True)
             log_conversation_db(sid, q, msg)
             st.stop()
 
@@ -222,5 +222,5 @@ Conversation Memory:
 
     # Output + Save
     st.session_state["messages"].append({"role": "assistant", "content": assistant_text})
-    st.markdown(f"<div style='background:#FFE3ED;padding:8px;border-radius:8px'>{assistant_text}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='background:#FFE3ED;color:black;padding:8px;border-radius:8px'>{assistant_text}</div>", unsafe_allow_html=True)
     log_conversation_db(sid, q, assistant_text)
