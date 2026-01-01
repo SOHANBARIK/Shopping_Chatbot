@@ -151,7 +151,7 @@ def process_input():
                 response_text += "<br><br><b>Recommended Matches:</b><br>"
                 for m in [h["meta"] for h in hits]:
                     btn = format_buy_link(m.get('url', '#'))
-                    response_text += f"- {m['brand']} {m['name']} — ₹{m['price']}     {btn}<br>"
+                    response_text += f"- {m['brand']} {m['name']} — ₹{m['price']} {btn}<br>"
                     
         except Exception as e:
             response_text = f"AI Error: {e}"
