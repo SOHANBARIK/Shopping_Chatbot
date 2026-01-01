@@ -47,17 +47,13 @@ if os.path.exists(PRODUCTS_CSV):
 # --- HELPER FUNCTIONS ---
 
 def force_rerun():
-    """Forces a Streamlit rerun."""
     try:
         st.rerun()
     except:
         st.info("Please refresh manually.")
 
-def load_messages_from_db(sid):
-    """
-    Fetches messages from DB and updates Session State.
-    This acts as the 'Source of Truth'.
-    """
+def load_history_into_state(sid):
+    """Loads DB history into session state only when explicitly requested."""
     try:
         rows = get_session_messages(sid)
         msgs = []
@@ -77,11 +73,15 @@ st.markdown(
     unsafe_allow_html=True)
 st.title("AI Support Chatbot 💄")
 
-# Ensure session state structure exists
+# --- INITIALIZATION ---
 if "current_session" not in st.session_state:
     st.session_state["current_session"] = None
+
+# If we have a session ID but no messages (e.g., after browser refresh), load them.
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
+    if st.session_state["current_session"]:
+        load_history_into_state(st.session_state["current_session"])
 
 # Sidebar Session Management
 with st.sidebar:
@@ -96,7 +96,6 @@ with st.sidebar:
             st.error(f"Failed to create session: {e}")
 
     st.markdown("### Saved sessions")
-    # Wrap db listing in try/except to prevent sidebar crash
     try:
         sessions = list_sessions()
     except:
@@ -107,19 +106,21 @@ with st.sidebar:
         last = s["last_active"]
 
         cols = st.columns([6, 1])
+        # LOAD BUTTON
         if cols[0].button(f"{sid}\n{last}", key=f"load_{sid}"):
             st.session_state["current_session"] = sid
-            load_messages_from_db(sid)
+            load_history_into_state(sid) # Explicit read from DB
             force_rerun()
 
+        # DELETE BUTTON
         if cols[1].button("Del", key=f"del_{sid}"):
             from rag_postgres import delete_session
             delete_session(sid)
             st.success(f"Deleted {sid}")
             force_rerun()
 
-# --- MAIN CHAT RENDER LOOP ---
-# Always render what is in the state (which we sync from DB)
+# --- RENDER MESSAGES ---
+# We render whatever is in local state. This is instant.
 for m in st.session_state["messages"]:
     c = m["content"]
     bg = "#E8F0FE" if m["role"] == "user" else "#FFE3ED"
@@ -129,49 +130,44 @@ for m in st.session_state["messages"]:
 q = st.chat_input("Ask about products or prices...")
 
 if q:
-    # 1. AUTO-CREATE SESSION if missing
+    # 1. AUTO-SESSION
     if st.session_state["current_session"] is None:
         new_sid = f"session_{int(time.time())}"
-        try:
-            create_session_in_db(new_sid)
-            st.session_state["current_session"] = new_sid
-        except Exception as e:
-            st.error(f"CRITICAL ERROR: Could not create session in DB. {e}")
-            st.stop()
+        create_session_in_db(new_sid)
+        st.session_state["current_session"] = new_sid
     
     sid = st.session_state["current_session"]
 
-    # 2. DEFINE THE ASSISTANT RESPONSE
-    # (We calculate the response *before* displaying it so we can save both at once)
-    
+    # 2. OPTIMISTIC UPDATE (USER)
+    # Add to state and display IMMEDIATELY. Do not wait for DB.
+    st.session_state["messages"].append({"role": "user", "content": q})
+    st.markdown(f"<div style='background:#E8F0FE;color:black;padding:8px;border-radius:8px'>{q}</div>", unsafe_allow_html=True)
+
+    # 3. GENERATE RESPONSE
     assistant_text = ""
-    should_stop = False
+    
+    # Handoff
+    if not assistant_text:
+        handoff = detect_handoff_intent(q)
+        if handoff:
+            info = handoff["contact"]
+            topic = handoff["topic"].title()
+            assistant_text = f"<b>{topic} Support</b><br>Phone: {info['phone']}<br>Email: {info['email']}<br>{info['instructions']}"
 
-    # A. Check Handoff
-    handoff = detect_handoff_intent(q)
-    if handoff:
-        info = handoff["contact"]
-        topic = handoff["topic"].title()
-        assistant_text = f"<b>{topic} Support</b><br>Phone: {info['phone']}<br>Email: {info['email']}<br>{info['instructions']}"
-        should_stop = True
-
-    # B. Check Analytics
+    # Analytics
     if not assistant_text:
         analytic = detect_analytic_query(q)
         if analytic == "most_expensive":
             item = get_most_expensive()
             assistant_text = f"💎 <b>Most Expensive Lipstick</b><br>{item['Brand']} {item['Product Name']} — ₹{item['Price']}<br><a href='{item['URL']}' target='_blank'>link</a>"
-            should_stop = True
         elif analytic == "cheapest":
             item = get_cheapest()
             assistant_text = f"💸 <b>Cheapest Lipstick</b><br>{item['Brand']} {item['Product Name']} — ₹{item['Price']}<br><a href='{item['URL']}' target='_blank'>link</a>"
-            should_stop = True
         elif analytic == "all_products":
             items = get_all_products()
             assistant_text = "<b>All Products:</b><br>"
             for i in items:
                 assistant_text += f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']} → <a href='{i['URL']}' target='_blank'>link</a><br>"
-            should_stop = True
         elif analytic == "price_filter":
             nums = re.findall(r"\d+", q)
             if nums:
@@ -180,19 +176,17 @@ if q:
                 assistant_text = f"<b>Products under ₹{max_price}:</b><br>"
                 for i in items:
                     assistant_text += f"- {i['Brand']} {i['Product Name']} — ₹{i['Price']} → <a href='{i['URL']}' target='_blank'>link</a><br>"
-                should_stop = True
 
-    # C. RAG / Vector Search
+    # RAG
     if not assistant_text:
         hits = query_and_rerank(q, n=5)
         docs = [h["doc"] for h in hits]
         metas = [h["meta"] for h in hits]
 
-        # Context Memory
-        memory_rows = get_session_messages(sid)[-MEMORY_WINDOW:]
+        # Use local state for memory, not DB (faster)
+        memory_msgs = st.session_state["messages"][-MEMORY_WINDOW:] 
         memory_text = "\n".join(
-            [("User: " + r["user_message"]) if r["user_message"] else ("Assistant: " + r["assistant_message"])
-             for r in memory_rows]
+            [f"{m['role'].title()}: {m['content']}" for m in memory_msgs]
         )
 
         system_prompt = """
@@ -203,12 +197,7 @@ if q:
         3. Never guess or make up products, names, brands, or prices.
         4. Be short, factual, and helpful.
         """
-
-        user_prompt = f"""
-        User question: {q}
-        Context: {docs}
-        Memory: {memory_text}
-        """
+        user_prompt = f"User question: {q}\nContext: {docs}\nMemory: {memory_text}"
 
         client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
         resp = client.chat.completions.create(
@@ -222,24 +211,24 @@ if q:
         )
         assistant_text = html.escape(resp.choices[0].message.content.strip())
         
-        # Append matches
         if metas:
             assistant_text += "<br><br><b>Top Matches:</b><br>"
             for m in metas:
                 url = m.get("url", FALLBACK_IMAGE)
                 assistant_text += f"- {m['brand']} {m['name']} — ₹{m['price']} → <a href='{url}' target='_blank'>link</a><br>"
 
-    # 3. CRITICAL STEP: SAVE TO DB THEN RELOAD STATE
+    # 4. OPTIMISTIC UPDATE (ASSISTANT)
+    # Update local state immediately
+    st.session_state["messages"].append({"role": "assistant", "content": assistant_text})
+    st.markdown(f"<div style='background:#FFE3ED;color:black;padding:8px;border-radius:8px'>{assistant_text}</div>", unsafe_allow_html=True)
+
+    # 5. ASYNC DB SAVE
+    # Save to DB for *persistence*, but don't read it back right now.
     try:
-        # Save to PostgreSQL
         log_conversation_db(sid, q, assistant_text)
-        
-        # Reload strict from PostgreSQL (Ensures UI and DB are identical)
-        load_messages_from_db(sid)
-        
-        # Force Rerun to update the view immediately
-        force_rerun()
-        
     except Exception as e:
-        st.error(f"❌ DATA SAVE FAILED: {e}")
-        # We do NOT rerun here, so you can see the error message.
+        st.error(f"Saved to screen, but DB write failed: {e}")
+    
+    # NO st.rerun() HERE!
+    # By removing st.rerun(), we keep the current state visible.
+    # The next time you type or click something, Streamlit will loop naturally.
