@@ -123,7 +123,14 @@ def process_input():
         mem_history = st.session_state["messages"][-6:]
         mem_str = "\n".join([f"{m['role']}: {m['content']}" for m in mem_history])
 
-        system_prompt = "You are a helpful shopping assistant. Use the Context to answer. If unsure, say so."
+        system_prompt = """
+        You are a STRICT product assistant.
+    Rules:
+1. Only use the CONTEXT provided.
+2. If the answer is not in the context, say "I don't have that information."
+3. Never guess or make up products, names, brands, or prices.
+4. Be short, factual, and helpful."
+        """
         user_prompt = f"Question: {user_text}\nContext: {docs}\nHistory: {mem_str}"
 
         try:
