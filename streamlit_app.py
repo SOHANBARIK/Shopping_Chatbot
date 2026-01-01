@@ -109,7 +109,7 @@ q = st.chat_input("Ask about products or prices...")
 if q:
     sid = st.session_state["current_session"]
     st.session_state["messages"].append({"role": "user", "content": q})
-    st.markdown(f"<div style='background:#E8F0FE;padding:8px;border-radius:8px'>{q}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='background:#E8F0FE;color:black;padding:8px;border-radius:8px'>{q}</div>", unsafe_allow_html=True)
 
     # --- Handoff Intent (Returns, Offers, Complaint) ---
     handoff = detect_handoff_intent(q)
