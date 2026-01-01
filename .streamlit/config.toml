@@ -1,0 +1,7 @@
+[server]
+# Prevents Streamlit from watching file changes (stop the auto-reload loop)
+fileWatcherType = "none" 
+
+[runner]
+# stricter garbage collection
+fastReruns = false
