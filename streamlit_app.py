@@ -49,8 +49,8 @@ def format_buy_link(url):
     if not url or url == "#":
         return ""
     # Green button style
-    return f"""<a href='{url}' target='_blank' style='
-        background-color:#28a745; 
+    return f"""        <a href='{url}' target='_blank' style='
+        background-color:#FF0000; 
         color:white; 
         padding:3px 6px; 
         text-decoration:none; 
