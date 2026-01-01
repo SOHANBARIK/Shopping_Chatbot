@@ -47,7 +47,7 @@ if os.path.exists(PRODUCTS_CSV):
 # Rerun helper
 def force_rerun():
     try:
-        return st.rerun()
+        st.rerun()
     except:
         st.info("Please refresh manually.")
 
@@ -105,10 +105,19 @@ for m in st.session_state["messages"]:
 
 # Chat Input
 q = st.chat_input("Ask about products or prices...")
-st.markdown(f"<div style='background:#E8F0FE;color:black;padding:8px;border-radius:8px'>{c}</div>", unsafe_allow_html=True)
 
 if q:
+    # ---------------------------------------------------------
+    # FIX: Auto-create session if user types without selecting one
+    # ---------------------------------------------------------
+    if st.session_state["current_session"] is None:
+        new_sid = f"session_{int(time.time())}"
+        create_session_in_db(new_sid)
+        st.session_state["current_session"] = new_sid
+    
     sid = st.session_state["current_session"]
+    # ---------------------------------------------------------
+
     st.session_state["messages"].append({"role": "user", "content": q})
     st.markdown(f"<div style='background:#E8F0FE;color:black;padding:8px;border-radius:8px'>{q}</div>", unsafe_allow_html=True)
 
@@ -224,4 +233,6 @@ Conversation Memory:
     # Output + Save
     st.session_state["messages"].append({"role": "assistant", "content": assistant_text})
     st.markdown(f"<div style='background:#FFE3ED;color:black;padding:8px;border-radius:8px'>{assistant_text}</div>", unsafe_allow_html=True)
+    
+    # Save to DB
     log_conversation_db(sid, q, assistant_text)
